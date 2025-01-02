@@ -30,9 +30,7 @@ public class Iris {
         return new double[] { sepalLength, sepalWidth, petalLength, petalWidth };
     }
 
-    public double[] getD() {
-        double[] d = new double[3];
-        d[species.getI()] = 1;
-        return d;
+    public double getD() {
+        return species.getI() * 0.5;
     }
 }

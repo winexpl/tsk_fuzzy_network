@@ -1,5 +1,7 @@
 package com.example.layers;
 
+import java.util.Arrays;
+
 import lombok.Data;
 
 @Data
@@ -16,13 +18,10 @@ public class SumLayer implements Layer {
         this.M = dimInput/dimOutput;
     }
 
-    public double[] get(double[] x) {
-        double y[] = new double[dimOutput];
-        for (int i = 0; i < dimOutput; i++) {
-            for (int j = 0; j < M; j++) {
-                y[i] += x[i+j*dimOutput];
-            }
-        }
-        return y;
+    public double get(double[] x, double v[]) {
+        double y = Arrays.stream(x).sum();
+        double sum = Arrays.stream(v).sum();
+        
+        return y/sum;
     }
 }

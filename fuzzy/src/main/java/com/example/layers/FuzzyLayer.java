@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Random;
 
 import com.example.layers.resources.FuzzyFunction;
+import com.example.layers.resources.QFunction;
 import com.example.models.resources.IrisFields;
 import com.example.models.resources.SpeciesOfIris;
 
@@ -12,18 +13,6 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@FunctionalInterface
-interface QFunction<T> {
-
-    /**
-     * Applies this function to the given arguments.
-     *
-     * @param t the first function argument
-     * @param u the second function argument
-     * @return the function result
-     */
-    T apply(T x, T sigma, T c, T b);
-}
 
 @Data
 @NoArgsConstructor
@@ -36,7 +25,7 @@ public final class FuzzyLayer implements Layer {
     private double[] c;
     private double[] b;
     @Getter
-    private static QFunction<Double> fuzzyFunction;
+    private QFunction<Double> fuzzyFunction;
 
     public void setFuzzyFunction(FuzzyFunction f) {
         fuzzyFunction = switch (f) {
@@ -61,7 +50,7 @@ public final class FuzzyLayer implements Layer {
         b = new double[dimOutput];
         Random rand = new Random();
         for (int i = 0; i < dimOutput; i++) {
-            sigma[i] = rand.nextDouble(0,1);
+            sigma[i] = rand.nextDouble(0,10);
             c[i] = rand.nextDouble(0,10);
             b[i] = rand.nextInt(0,10);
         }

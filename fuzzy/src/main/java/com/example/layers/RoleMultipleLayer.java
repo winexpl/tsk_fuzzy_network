@@ -26,18 +26,11 @@ public class RoleMultipleLayer implements Layer {
          */
         if(x.length != dimInput) throw new RuntimeException("The input data does not match the size of the input layer");
         double[] y = new double[dimOutput];
-        for (int i = 0; i < dimOutput; i++) {
-            y[i] = 1;
-        }
-        double sum = 0;
         for(int i = 0; i < dimOutput; i++) {
+            y[i] = 1;
             for (int j = 0; j < N ; j++) {
                 y[i] *= x[i + j*dimOutput];
             }
-            sum += y[i];
-        }
-        for (int i = 0; i < dimOutput; i++) {
-            y[i] /= sum; // mul(nu_ij(x)) / sum(mul(nu_ij(x)))
         }
 
         return y;

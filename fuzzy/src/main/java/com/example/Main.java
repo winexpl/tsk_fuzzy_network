@@ -25,27 +25,19 @@ public class Main {
     public static void main(String[] args) throws FileNotFoundException {
         loadData();
         shuffle(dataset);
-        TSK modelTSK = new TSK(4, 4, 3);
-        HybridLearningAlgorithm.learningTSKBatchFirstStep(modelTSK, dataset, 16, 0);
+        TSK modelTSK = new TSK(4, 6, 1);
+        HybridLearningAlgorithm hla = new HybridLearningAlgorithm(modelTSK, dataset, 1);
 
-        double[][] predict = modelTSK.predict(dataset, 16);
-
-        SpeciesOfIris[] speciesOfIrises = SpeciesOfIris.values();
-        System.out.println("--- PREDICT ---");
-        for (int i = 0; i < predict.length; i++) {
-            System.out.println(speciesOfIrises[imax(predict[i])] + " " + dataset.get(i).getSpecies());
-        }
+        double[] predict = modelTSK.predict(dataset);
         
-        // Map<SpeciesOfIris, List<Double>> answer = new EnumMap<>(SpeciesOfIris.class);
-        // SpeciesOfIris speciesOfIris[] = SpeciesOfIris.values();
-
-        // StringBuilder builder = new StringBuilder();
-        // for (int i = 0; i < dataset.size(); i++) {
-        //     double w[] = layer2.get(layer1.get(dataset.get(i).getValues()));
-        //     int index = imax(w);
-        //     builder.append(speciesOfIris[index].toString()).append("\t").append(Arrays.toString(w)).append("\n");
-        // }
-        // System.out.println(builder.toString());
+        System.out.println("After first epoch: " + dataset.size());
+        for (int i = 0; i < 100; i++) {
+            for (int j = 0; j < 10; j++) {
+                hla.learningTSKBatchFirstStep(15, j);
+                //hla.learningTSKBatchSecondStep(15, j);
+            }
+        }
+        predict = modelTSK.predict(dataset);
     }
 
     public static int imax(double[] array) {
@@ -94,6 +86,7 @@ public class Main {
                 irises.add(new Iris(scanner.nextDouble(), scanner.nextDouble(),
                     scanner.nextDouble(), scanner.nextDouble(), scanner.next()));
             }
+            // System.out.println(irises);
             double[][][] values = new double[3][4][50];
             int counter = 0;
             for(int k = 0; k < 3; k++) {
@@ -121,6 +114,7 @@ public class Main {
                 }
             }
             dataset = irises;
+            //System.out.println(dataset);
         }
     }
 }

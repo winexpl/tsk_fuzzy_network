@@ -39,44 +39,47 @@ public class TSK {
     public void updateP(double[][] P) {
         double[][] oldP = multipleLayer.getP();
         double[][] newP = new double[oldP.length][oldP[0].length];
-        
-        for (int i = 0; i < newP.length /* M*out */; i++) {
-            for (int j = 0; j < newP[0].length /* N+1 */; j++) {
-                int newI = (j % (P.length/(newP.length/P[0].length)) + (i / 3) * 5);
-                int newJ = (i % 3);
-                newP[i][j] = P[newI][newJ];
-            }
+
+        for (int i = 0; i < P.length; i++) {
+            newP[i/(oldP[0].length)][i%(oldP[0].length)] = P[i][0];
         }
+        // for(var i: newP) {
+        //     //System.out.println("newP " + Arrays.toString(i));
+        // }
         multipleLayer.setP(newP);
     }
 
-    public double[] predict1(double[] x) {
+    public double predict1(Iris x) {
 
-        double[] y1 = fuzzyLayer.get(x);
+        double[] y1 = fuzzyLayer.get(x.getValues());
+        //System.out.println("y1: " + Arrays.toString(y1));
         double[] y2 = roleMultipleLayer.get(y1);
-        double[] y3 = multipleLayer.get(y2, x);
-        double[] y4 = sumLayer.get(y3);
-
+        //System.out.println("y2: " + Arrays.toString(y2));
+        double[] y3 = multipleLayer.get(y2, x.getValues());
+        //System.out.println("y3: " + Arrays.toString(y3));
+        double y4 = sumLayer.get(y3, y2);
+        System.out.println("predict: " + y4 + " source: " + x.getD());
+        if(Double.isNaN(y4)) throw new RuntimeException("y4 is NaN");
         return y4;
     }
     
-    public double[][] predict(List<Iris> dataset) {
+    public double[] predict(List<Iris> dataset) {
         /**
          * Предсказать по всей выборке
          */
         return predict(dataset, dataset.size(), 0);
     }
-    public double[][] predict(List<Iris> dataset, int n, int k) {
+
+    public double[] predict(List<Iris> dataset, int n, int k) {
         /*
          * Предсказать по части выборки
          * n - размер батча
          * k - индекс начального вектора из выборки
          */
 
-        double[][] y = new double[n][];
+        double[] y = new double[n];
         for (int i = k; i < n+k; i++) {
-            double[] x = dataset.get(i).getValues();
-
+            Iris x = dataset.get(i);
             y[i] = predict1(x);
         }
         return y;
