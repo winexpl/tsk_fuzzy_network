@@ -1,6 +1,4 @@
-package com.example.models;
-
-import java.util.List;
+package com.example.model;
 
 import com.example.layers.FuzzyLayer;
 import com.example.layers.MultipleLayer;
@@ -43,47 +41,70 @@ public class TSK {
         for (int i = 0; i < P.length; i++) {
             newP[i/(oldP[0].length)][i%(oldP[0].length)] = P[i][0];
         }
-        // for(var i: newP) {
-        //     //System.out.println("newP " + Arrays.toString(i));
-        // }
         multipleLayer.setP(newP);
     }
 
-    public double predict1(Iris x) {
+    public double predict1(double[] x) {
 
-        double[] y1 = fuzzyLayer.get(x.getValues());
-        //System.out.println("y1: " + Arrays.toString(y1));
+        double[] y1 = fuzzyLayer.get(x);
         double[] y2 = roleMultipleLayer.get(y1);
-        //System.out.println("y2: " + Arrays.toString(y2));
-        double[] y3 = multipleLayer.get(y2, x.getValues());
-        //System.out.println("y3: " + Arrays.toString(y3));
+        double[] y3 = multipleLayer.get(y2, x);
         double y4 = sumLayer.get(y3, y2);
-        System.out.println("predict: " + y4 + " source: " + x.getD());
         if(Double.isNaN(y4)) throw new RuntimeException("y4 is NaN");
         return y4;
     }
     
-    public double[] predict(List<Iris> dataset) {
-        /**
-         * Предсказать по всей выборке
-         */
-        return predict(dataset, dataset.size(), 0);
+    public double evaluate1(double[] x, double d) {
+
+        double[] y1 = fuzzyLayer.get(x);
+        double[] y2 = roleMultipleLayer.get(y1);
+        double[] y3 = multipleLayer.get(y2, x);
+        double y4 = sumLayer.get(y3, y2);
+        if(Double.isNaN(y4)) throw new RuntimeException("y4 is NaN");
+        System.out.println("predict: " + y4 + " source: " + d);
+        return y4;
     }
 
-    public double[] predict(List<Iris> dataset, int n, int k) {
+    public double[] evaluate(double[][] dataset, double[] d) {
+        return evaluate(dataset, d, dataset.length, 0);
+    }
+
+    public double[] evaluate(double[][] dataset, double [] d, int n, int k) {
         /*
          * Предсказать по части выборки
          * n - размер батча
          * k - индекс начального вектора из выборки
          */
-
         double[] y = new double[n];
         for (int i = k; i < n+k; i++) {
-            Iris x = dataset.get(i);
+            double[] x = dataset[i];
+            y[i] = evaluate1(x, d[i]);
+        }
+        return y;
+    }
+
+    public double[] predict(double[][] dataset, int n, int k) {
+        /*
+         * Предсказать по части выборки
+         * n - размер батча
+         * k - индекс начального вектора из выборки
+         */
+        double[] y = new double[n];
+        for (int i = k; i < n+k; i++) {
+            double[] x = dataset[i];
             y[i] = predict1(x);
         }
         return y;
     }
+
+    public double[] predict(double[][] dataset) {
+        /**
+         * Предсказать по всей выборке
+         */
+
+        return predict(dataset, dataset.length, 0);
+    }
+
 
     public double[] getW(double[] x) {
         double[] w = fuzzyLayer.get(x);

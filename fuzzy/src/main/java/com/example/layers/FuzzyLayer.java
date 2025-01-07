@@ -1,13 +1,9 @@
 package com.example.layers;
 
-import java.util.EnumMap;
-import java.util.Map;
 import java.util.Random;
 
 import com.example.layers.resources.FuzzyFunction;
 import com.example.layers.resources.QFunction;
-import com.example.models.resources.IrisFields;
-import com.example.models.resources.SpeciesOfIris;
 
 import lombok.Data;
 import lombok.Getter;
@@ -50,31 +46,12 @@ public final class FuzzyLayer implements Layer {
         b = new double[dimOutput];
         Random rand = new Random();
         for (int i = 0; i < dimOutput; i++) {
-            sigma[i] = rand.nextDouble(0,10);
-            c[i] = rand.nextDouble(0,10);
+            sigma[i] = rand.nextDouble(0,100);
+            c[i] = rand.nextDouble(0,100);
             b[i] = rand.nextInt(0,10);
         }
     }
 
-    public FuzzyLayer(Map<SpeciesOfIris, EnumMap<IrisFields, Double>> startValue) {
-        setFuzzyFunction(FuzzyFunction.GENERAL_GAUSSIAN);
-        SpeciesOfIris speciesOfIris[] = SpeciesOfIris.values();
-        IrisFields irisFields[] = IrisFields.values();
-
-        this.dimInput = irisFields.length;
-        this.M = speciesOfIris.length;
-        this.dimOutput = dimInput * M;
-
-        sigma = new double[dimOutput];
-        c = new double[dimOutput];
-    
-        for (int i = 0; i < dimInput; i++) {
-            for (int j = 0; j < M; j++) {
-                c[i*M+j] = startValue.get(speciesOfIris[j]).get(irisFields[i]);
-                sigma[i*M+j] = 1;
-            }
-        }
-    }
     
     public double[] get(double[] x) {
         if(x.length != dimInput) throw new RuntimeException("The input data does not match the size of the input layer");

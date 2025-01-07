@@ -1,6 +1,6 @@
 package com.example.learning;
 
-import java.util.List;
+import java.util.stream.IntStream;
 
 import org.apache.commons.math3.linear.DecompositionSolver;
 import org.apache.commons.math3.linear.MatrixUtils;
@@ -8,14 +8,14 @@ import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.SingularValueDecomposition;
 
 import com.example.layers.FuzzyLayer;
-import com.example.models.Iris;
-import com.example.models.TSK;
+import com.example.model.TSK;
+import com.example.model.resources.Dataset;
 
 import lombok.AllArgsConstructor;
 @AllArgsConstructor
 public class HybridLearningAlgorithm {
     private TSK tsk;
-    private List<Iris> irises;
+    private Dataset dataset;
     private int out = 1;
     public void learningTSKBatchFirstStep(int batchSize, int numBatch) {
         /*
@@ -26,7 +26,15 @@ public class HybridLearningAlgorithm {
          * w_k = MUL по j до N (nu^k(x_j)) / SUM по r до M(MUL по j до N (nu^k(x_j)))
          */
 
-        RealMatrix D = MatrixUtils.createRealMatrix(getD(irises, numBatch*batchSize, batchSize));
+        int startIndex = numBatch * batchSize;
+        int endIndex = (numBatch + 1) * batchSize;
+        
+        RealMatrix D = MatrixUtils.createRealMatrix(
+            IntStream.range(startIndex, endIndex)
+                    .mapToObj(i -> new double[]{dataset.getD()[i]})
+                    .toArray(double[][]::new)
+        );
+
         double[][] A_matrix = new double[batchSize][];
         double[] x;
         double[] w;
@@ -34,7 +42,7 @@ public class HybridLearningAlgorithm {
         int N = tsk.getN();
         int M = tsk.getM();
         for (int i = 0; i < batchSize; i++) {
-            x = irises.get(i).getValues();
+            x = dataset.getValues()[i + startIndex];
             w = tsk.getW(x);
             A_matrix[i] = new double[ (N + 1) * M ];
             for (int j = 0; j < M * (N + 1); j++) {
@@ -56,35 +64,40 @@ public class HybridLearningAlgorithm {
         double[] oldSigma = tsk.getSigma();
         double[] oldB = tsk.getB();
         double[][] p = tsk.getP();
-        for (int i = 0; i < batchSize; i++) { // по всему батчу
-            Iris iris = irises.get(numBatch*batchSize + i);
-            double y = tsk.predict1(iris);
-            double d = iris.getD();
 
-            double nu = 0.005;
+        double[] dArray = dataset.getD();
+        double[][] valuesArray = dataset.getValues();
+        for(int l = 0; l < 10; l++) {
+        for (int i = 0; i < batchSize; i++) { // по всему батчу
+            double x[] = valuesArray[numBatch*batchSize + i];
+            double y = tsk.predict1(x);
+            double d = dArray[numBatch*batchSize + i];
+
+            double nu = 0.001;
             double e = y - d; // расчет ошибки
-            // System.out.println("e = " + e + " y = " + y + " d = " + d);
             for (int k = 0; k < M*N; k++) { // по всем параметрам
                 // c
                 double newC = oldC[k];
-                newC -= nu*dEdc(e, p, iris.getValues(), k);
+                newC -= nu*dEdc(e, p, x, k);
                 // System.out.println("newC " + newC);
                 // sigma
                 double newSigma = oldSigma[k];
-                newSigma -= nu*dEdsigma(e, p, iris.getValues(), k);
+                newSigma -= nu*dEdsigma(e, p, x, k);
                 // System.out.println("newSigma " + newSigma);
                 // b
                 double newB = oldB[k];
-                newB -= nu*dEdb(e, p, iris.getValues(), k);
-                System.out.println("newC " + newC + " newSigma " + newSigma + " newB " + newB);
+                newB -= nu*dEdb(e, p, x, k);
+                newB = Math.ceil(newB);
                 // update
                 oldC[k] = newC;
                 oldSigma[k] = newSigma;
                 oldB[k] = newB;
+                //System.out.println("newC " + newC + " newSigma " + newSigma + " newB " + newB);
             }
             tsk.setC(oldC);
             tsk.setSigma(oldSigma);
             tsk.setB(oldB);
+        }
         }
         
     }
@@ -106,11 +119,10 @@ public class HybridLearningAlgorithm {
             temp *= dWdsigma(ii, i, x);
             sum_p += temp;
         }
-        if(Double.isNaN(e*sum_p)) return 0;
-        return e*sum_p;
+        return e * sum_p;
     }
 
-    private int dEdb(double e, double[][] p, double[] x, int ii) {
+    private double dEdb(double e, double[][] p, double[] x, int ii) {
         /**
          * ii - номер изменяемого параметра в массиве, 
          *  т.е. ii%M = номер правила
@@ -127,7 +139,7 @@ public class HybridLearningAlgorithm {
             temp *= dWdb(ii, i, x);
             sum_p += temp;
         }
-        return (int) Math.ceil(e * sum_p);
+        return e * sum_p;
     }
 
     private double dEdc(double e, double[][] p, double[] x, int ii) {
@@ -147,23 +159,25 @@ public class HybridLearningAlgorithm {
             temp *= dWdC(ii, i, x);
             sum_p += temp;
         }
-        return e*sum_p;
+        return e * sum_p;
     }
 
     private double dWdb(int ii, int r, double[] x) {
         /**
+         * r - номер правила по которому ищем производную
          * ii - номер изменяемого параметра в массиве,
-         *  т.е. ii%M = номер правила
+         *  т.е. ii%M = номер правила для изменяемого параметра
          *          ii/M = номер входного параметра
          * x - текущий вектор параметров ириса
          */
         int k = ii % tsk.getM();
         int j = ii / tsk.getM();
 
-        int res = deltaKronecker(r, j);
-        res *= m(x);
+        double res = deltaKronecker(r, k);
+        double mm = m(x);
+        res *= mm;
         res -= l(x, k);
-        res /= Math.pow(m(x), 2);
+        res /= Math.pow(mm, 2);
         double c[] = tsk.getC();
         double b[] = tsk.getB();
         double sigma[] = tsk.getSigma();
@@ -173,15 +187,15 @@ public class HybridLearningAlgorithm {
         int M = tsk.getM();
         int N = tsk.getN();
         for (int i = k; i < M * N; i+=M) {
-            if(j != i) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
+            if(j != i / M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
         }
         
-        res *= multiple;
+        multiple *= res;
 
-        double dnu = (int) (-2 * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] ) * Math.log((x[j] - c[ii]) / sigma[ii]));
+        double dnu = (int) ( -2 * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] ) * Math.log((x[j] - c[ii]) / sigma[ii]));
         dnu /= Math.pow(1 + Math.pow((x[j] - c[ii]) / sigma[ii], 2 * b[ii]), 2);
 
-        return res * dnu;
+        return multiple * dnu;
     }
 
     private double dWdsigma(int ii, int r, double[] x) {
@@ -194,7 +208,7 @@ public class HybridLearningAlgorithm {
         int k = ii % tsk.getM();
         int j = ii / tsk.getM();
 
-        double res = deltaKronecker(r, j);
+        double res = deltaKronecker(r, k);
         res *= m(x);
         res -= l(x, k);
         res /= Math.pow(m(x), 2);
@@ -207,14 +221,14 @@ public class HybridLearningAlgorithm {
         int M = tsk.getM();
         int N = tsk.getN();
         for (int i = k; i < M * N; i+=M) {
-            if(j != i) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
+            if(j != i / M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
         }
         
         res *= multiple;
 
-        double dnu = 2 * b[ii] / sigma[ii] * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] );
+        //double dnu = 1;
+        double dnu = (2 * b[ii] / sigma[ii]) * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] );
         dnu /= Math.pow(1 + Math.pow((x[j] - c[ii]) / sigma[ii], 2 * b[ii]), 2);
-
         return res * dnu;
     }
 
@@ -228,7 +242,7 @@ public class HybridLearningAlgorithm {
         int k = ii % tsk.getM();
         int j = ii / tsk.getM();
 
-        double res = deltaKronecker(r, j);
+        double res = deltaKronecker(r, k);
         res *= m(x);
         res -= l(x, k);
         res /= Math.pow(m(x), 2);
@@ -241,11 +255,10 @@ public class HybridLearningAlgorithm {
         int M = tsk.getM();
         int N = tsk.getN();
         for (int i = k; i < M * N; i+=M) {
-            if(j != i/M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
+            if(j != i / M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
         }
         
         res *= multiple;
-
         double dnu = 2 * b[ii] / sigma[ii] * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] - 1);
         dnu /= Math.pow(1 + Math.pow((x[j] - c[ii]) / sigma[ii], 2 * b[ii]), 2);
 
@@ -270,14 +283,6 @@ public class HybridLearningAlgorithm {
         return i==j? 1:0;
     }
 
-    public static double[][] getD(List<Iris> dataset, int i, int batchSize) {
-        double[][] d = new double[batchSize][];
-        for(int j = 0; j < batchSize; j++) {
-            d[j] = new double[1];
-            d[j][0] = dataset.get(i+j).getD();
-        }
-        return d;
-    }
     public static RealMatrix pseudoInverse(RealMatrix A) {
         SingularValueDecomposition svd = new SingularValueDecomposition(A);
         DecompositionSolver solver = svd.getSolver();
