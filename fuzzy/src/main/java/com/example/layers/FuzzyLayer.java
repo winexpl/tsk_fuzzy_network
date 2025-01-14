@@ -32,7 +32,7 @@ public final class FuzzyLayer implements Layer {
     }
 
     public static double generalGaussianMembersFunction(double x, double sigma, double c, double b) {
-        double res = 1/(1+Math.pow( ( x-c )/sigma , 2*b));
+        double res = 1/(1+Math.pow( ( x-c )/ sigma , 2*b));
         return res;
     }
 
@@ -46,9 +46,9 @@ public final class FuzzyLayer implements Layer {
         b = new double[dimOutput];
         Random rand = new Random();
         for (int i = 0; i < dimOutput; i++) {
-            sigma[i] = rand.nextDouble(0,100);
-            c[i] = rand.nextDouble(0,100);
-            b[i] = rand.nextInt(0,10);
+            sigma[i] = rand.nextDouble(0.1,1);
+            c[i] = rand.nextDouble(0.1,1);
+            b[i] = rand.nextInt(1,5);
         }
     }
 

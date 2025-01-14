@@ -8,14 +8,17 @@ import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.SingularValueDecomposition;
 
 import com.example.layers.FuzzyLayer;
+import com.example.layers.resources.QFunction;
 import com.example.model.TSK;
-import com.example.model.resources.Dataset;
 
 import lombok.AllArgsConstructor;
+import lombok.Data;
 @AllArgsConstructor
+@Data
 public class HybridLearningAlgorithm {
     private TSK tsk;
-    private Dataset dataset;
+    private double[][] _x;
+    private double[] _d;
     private int out = 1;
     public void learningTSKBatchFirstStep(int batchSize, int numBatch) {
         /*
@@ -31,7 +34,7 @@ public class HybridLearningAlgorithm {
         
         RealMatrix D = MatrixUtils.createRealMatrix(
             IntStream.range(startIndex, endIndex)
-                    .mapToObj(i -> new double[]{dataset.getD()[i]})
+                    .mapToObj(i -> new double[]{_d[i]})
                     .toArray(double[][]::new)
         );
 
@@ -42,7 +45,7 @@ public class HybridLearningAlgorithm {
         int N = tsk.getN();
         int M = tsk.getM();
         for (int i = 0; i < batchSize; i++) {
-            x = dataset.getValues()[i + startIndex];
+            x = _x[i + startIndex];
             w = tsk.getW(x);
             A_matrix[i] = new double[ (N + 1) * M ];
             for (int j = 0; j < M * (N + 1); j++) {
@@ -65,84 +68,89 @@ public class HybridLearningAlgorithm {
         double[] oldB = tsk.getB();
         double[][] p = tsk.getP();
 
-        double[] dArray = dataset.getD();
-        double[][] valuesArray = dataset.getValues();
+        double nuC = (double)0.5;
+        double nuSigma = (double)0.5;
+        double nuB = (double)0.5;
         for(int l = 0; l < 10; l++) {
         for (int i = 0; i < batchSize; i++) { // по всему батчу
-            double x[] = valuesArray[numBatch*batchSize + i];
+            double x[] = _x[numBatch*batchSize + i];
+            double d = _d[numBatch*batchSize + i];
             double y = tsk.predict1(x);
-            double d = dArray[numBatch*batchSize + i];
+            
+            // System.out.println(y);
 
-            double nu = 0.001;
+            
             double e = y - d; // расчет ошибки
+            // e = e < 0.1 ? 0.1 : e;
             for (int k = 0; k < M*N; k++) { // по всем параметрам
                 // c
                 double newC = oldC[k];
-                newC -= nu*dEdc(e, p, x, k);
-                // System.out.println("newC " + newC);
+                double dEdc = dE(e, p, x, k, (xi, sigma, c, b) -> {
+                    double dnu = 2 * b / sigma * Math.pow( (xi - c) / sigma, 2 * b - 1);
+                    dnu /= Math.pow(1 + Math.pow( (xi- c) / sigma, 2 * b), 2);
+                    if(Double.isNaN(dnu)) throw new RuntimeException("c is nan \nb="+b+" c="+c+" sigma="+sigma +" e="+e);
+
+                    return dnu;
+                });
+                
                 // sigma
                 double newSigma = oldSigma[k];
-                newSigma -= nu*dEdsigma(e, p, x, k);
+                double dEdSigma = dE(e, p, x, k, (var xi, var sigma, var c, var b) -> {
+                    double dnu = 2 * b / sigma * Math.pow( (xi - c) / sigma, 2 * b);
+                    dnu /= Math.pow(1 + Math.pow( (xi- c) / sigma, 2 * b), 2);
+                    if(Double.isNaN(dnu)) throw new RuntimeException("sigma is nan \nb="+b+" c="+c+" sigma="+sigma+" e="+e);
+                    return dnu;
+                });
+                
                 // System.out.println("newSigma " + newSigma);
                 // b
                 double newB = oldB[k];
-                newB -= nu*dEdb(e, p, x, k);
-                newB = Math.ceil(newB);
+                double dEdb = dE(e, p, x, k, (xi, sigma, c, b) -> {
+                    double dnu = -2 * Math.pow( (xi - c) / sigma, 2 * b) * Math.log( Math.abs((xi - c) / sigma) );
+
+                    dnu /= Math.pow(1 + Math.pow( (xi- c) / sigma, 2 * b), 2);
+                    if(Double.isNaN(dnu)) throw new RuntimeException("b is nan \nb="+b+" c="+c+" sigma="+sigma+" e="+e);
+                    return dnu;
+                });
+                double updateC = nuC*dEdc;
+                double updateB = nuB*dEdb;
+                double updateSigma = nuSigma*dEdSigma;
+                if(updateC > 100) updateC = 100;
+                else if(updateC < -100) updateC = -100;
+                if(updateB > 1) updateB = 1;
+                else if(updateB < -1) updateB = -1;
+                if(updateSigma > 100) updateSigma = 100;
+                else if(updateSigma < -100) updateSigma = -100;
+
+                newC -= updateC;
+                newSigma -= updateSigma;
+                newB -= updateB;
+                newB = Math.round(newB);
                 // update
+                // System.out.print(dEdc+" "+dEdSigma+" "+dEdb+" ");
+                // System.out.println("oldC = " + oldC[k] + " newC = " + newC + " dedc = " + dEdc);
+                // System.out.println("oldB = " + oldB[k] + " newB = " + newB + " dedb = " + dEdb);
+                // System.out.println("oldS = " + oldSigma[k] + " newS = " + newSigma + " deds = " + dEdSigma);
+
+                if(Double.isNaN(newC)) throw new RuntimeException("newC is nan");
+                if(Double.isNaN(newSigma)) throw new RuntimeException("newSigma is nan");
+                if(Double.isNaN(newB)) throw new RuntimeException("newB is nan");
+                
                 oldC[k] = newC;
                 oldSigma[k] = newSigma;
                 oldB[k] = newB;
-                //System.out.println("newC " + newC + " newSigma " + newSigma + " newB " + newB);
+                
+                // System.out.println("newC " + newC + " newSigma " + newSigma + " newB " + newB);
             }
             tsk.setC(oldC);
             tsk.setSigma(oldSigma);
             tsk.setB(oldB);
         }
         }
-        
+        System.out.print(".");
     }
 
-    private double dEdsigma(double e, double[][] p, double[] x, int ii) {
-        /**
-         * ii - номер изменяемого параметра в массиве, 
-         *  т.е. ii%M = номер правила
-         *          ii/M = номер входного параметра
-         * e - ошибка
-         * x - текущий вектор параметров ириса
-         */
-        double sum_p = 0;
-        for (int i = 0; i < p.length; i++) {
-            double temp = p[i][0];
-            for (int r = 1; r < p[i].length; r++) {
-                temp += p[i][r] * x[r-1];
-            }
-            temp *= dWdsigma(ii, i, x);
-            sum_p += temp;
-        }
-        return e * sum_p;
-    }
-
-    private double dEdb(double e, double[][] p, double[] x, int ii) {
-        /**
-         * ii - номер изменяемого параметра в массиве, 
-         *  т.е. ii%M = номер правила
-         *          ii/M = номер входного параметра
-         * e - ошибка
-         * x - текущий вектор параметров ириса
-         */
-        double sum_p = 0;
-        for (int i = 0; i < p.length; i+=1) {
-            double temp = p[i][0];
-            for (int r = 1; r < p[i].length; r++) {
-                temp += p[i][r] * x[r-1];
-            }
-            temp *= dWdb(ii, i, x);
-            sum_p += temp;
-        }
-        return e * sum_p;
-    }
-
-    private double dEdc(double e, double[][] p, double[] x, int ii) {
+    private double dE(double e, double[][] p, double[] x, int ii, QFunction<Double> dnu) {
         /**
          * ii - номер изменяемого параметра в массиве,
          *  т.е. ii%M = номер правила
@@ -156,24 +164,27 @@ public class HybridLearningAlgorithm {
             for (int r = 1; r < p[i].length; r++) {
                 temp += p[i][r] * x[r-1];
             }
-            temp *= dWdC(ii, i, x);
+            double dwdc = dW(ii, i, x, dnu);
+            temp *= dwdc;
             sum_p += temp;
         }
         return e * sum_p;
     }
-
-    private double dWdb(int ii, int r, double[] x) {
+    private double dW(int i, int r, double[] x, QFunction<Double> dnu) {
         /**
          * r - номер правила по которому ищем производную
-         * ii - номер изменяемого параметра в массиве,
-         *  т.е. ii%M = номер правила для изменяемого параметра
+         * i - номер изменяемого параметра в массиве,
+         *          т.е. ii%M = номер правила для изменяемого параметра
          *          ii/M = номер входного параметра
          * x - текущий вектор параметров ириса
          */
-        int k = ii % tsk.getM();
-        int j = ii / tsk.getM();
+        int M = tsk.getM();
+        int N = tsk.getN();
 
-        double res = deltaKronecker(r, k);
+        int k = r % M;
+        int j = r / M;
+
+        double res = deltaKronecker(i, k);
         double mm = m(x);
         res *= mm;
         res -= l(x, k);
@@ -184,85 +195,14 @@ public class HybridLearningAlgorithm {
 
         FuzzyLayer fuzzyLayer = tsk.getFuzzyLayer();
         double multiple = 1;
-        int M = tsk.getM();
-        int N = tsk.getN();
-        for (int i = k; i < M * N; i+=M) {
-            if(j != i / M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
-        }
         
-        multiple *= res;
-
-        double dnu = (int) ( -2 * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] ) * Math.log((x[j] - c[ii]) / sigma[ii]));
-        dnu /= Math.pow(1 + Math.pow((x[j] - c[ii]) / sigma[ii], 2 * b[ii]), 2);
-
-        return multiple * dnu;
-    }
-
-    private double dWdsigma(int ii, int r, double[] x) {
-        /**
-         * ii - номер изменяемого параметра в массиве, 
-         *  т.е. ii%M = номер правила
-         *          ii/M = номер входного параметра
-         * x - текущий вектор параметров ириса
-         */
-        int k = ii % tsk.getM();
-        int j = ii / tsk.getM();
-
-        double res = deltaKronecker(r, k);
-        res *= m(x);
-        res -= l(x, k);
-        res /= Math.pow(m(x), 2);
-        double c[] = tsk.getC();
-        double b[] = tsk.getB();
-        double sigma[] = tsk.getSigma();
-
-        FuzzyLayer fuzzyLayer = tsk.getFuzzyLayer();
-        double multiple = 1;
-        int M = tsk.getM();
-        int N = tsk.getN();
-        for (int i = k; i < M * N; i+=M) {
-            if(j != i / M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
+        for (int l = k; l < M * N; l+=M) {
+            if(j != i) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[l / M] , sigma[l], c[l], b[l]);
         }
-        
         res *= multiple;
-
-        //double dnu = 1;
-        double dnu = (2 * b[ii] / sigma[ii]) * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] );
-        dnu /= Math.pow(1 + Math.pow((x[j] - c[ii]) / sigma[ii], 2 * b[ii]), 2);
-        return res * dnu;
-    }
-
-    private double dWdC(int ii, int r, double[] x) {
-        /**
-         * ii - номер изменяемого параметра в массиве, 
-         *  т.е. ii%M = номер правила
-         *          ii/M = номер входного параметра
-         * x - текущий вектор параметров ириса
-         */
-        int k = ii % tsk.getM();
-        int j = ii / tsk.getM();
-
-        double res = deltaKronecker(r, k);
-        res *= m(x);
-        res -= l(x, k);
-        res /= Math.pow(m(x), 2);
-        double c[] = tsk.getC();
-        double b[] = tsk.getB();
-        double sigma[] = tsk.getSigma();
-
-        FuzzyLayer fuzzyLayer = tsk.getFuzzyLayer();
-        double multiple = 1;
-        int M = tsk.getM();
-        int N = tsk.getN();
-        for (int i = k; i < M * N; i+=M) {
-            if(j != i / M) multiple *= fuzzyLayer.getFuzzyFunction().apply(x[i / M] , sigma[i], c[i], b[i]);
-        }
         
-        res *= multiple;
-        double dnu = 2 * b[ii] / sigma[ii] * Math.pow( (x[j] - c[ii]) / sigma[ii], 2 * b[ii] - 1);
-        dnu /= Math.pow(1 + Math.pow((x[j] - c[ii]) / sigma[ii], 2 * b[ii]), 2);
-
-        return res * dnu;
+        res *= dnu.apply(x[j], sigma[r], c[r], b[r]);
+        return res;
     }
 
     private double m(double[] x) {

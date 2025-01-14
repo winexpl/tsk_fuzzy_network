@@ -1,8 +1,10 @@
 package com.example.layers.resources;
 
+import java.io.Serializable;
+
 @FunctionalInterface
 public
-interface QFunction<T> {
+interface QFunction<T> extends Serializable {
 
     /**
      * Applies this function to the given arguments.
